@@ -45,6 +45,8 @@ class RandomSpikeSource:
 
     def spikes(self, unit_id: str) -> np.ndarray:
 
+        if unit_id not in self._unit_ids: raise KeyError(f"Unknown unit '{unit_id}'")
+
         if unit_id not in self._cache:
 
             n_spikes = self._rng.poisson(self.duration * self.mean_rate_hz)

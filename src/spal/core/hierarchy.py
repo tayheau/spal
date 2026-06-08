@@ -12,6 +12,10 @@ class Unit:
     source: SpikeSource
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def spikes(self):
+        return self.source.spikes(self.id)
+
 
 @dataclass(frozen=True)
 class Recording:
@@ -22,16 +26,16 @@ class Recording:
     @classmethod
     def from_source(
         cls,
-        rid: str,
+        id: str,
         source: SpikeSource,
         *,
         metadata: dict[str, Any] | None = None,
-        unit_metadata: dict[str, dict] | None = None,
+        unit_metadata: dict[str, dict[str, Any]] | None = None,
     ) -> "Recording":
         """Build a Recording from a self-describing source's roster."""
         umd = unit_metadata or {}
-        units = [Unit(uid, source, dict(umd.get(uid, {}))) for uid in source.unit_ids]
-        return cls(rid, units, metadata or {})
+        units = [Unit(uid, source, umd.get(uid, {})) for uid in source.unit_ids]
+        return cls(id, units, metadata or {})
 
 
 @dataclass(frozen=True)
@@ -79,3 +83,10 @@ class Population:
 
         for _, unit in self.walk():
             yield unit
+
+    def recordings(self) -> Iterator[Recording]:
+        """
+        Iterate over each recordings.
+        """
+        for subject in self.subjects:
+            yield from subject.recordings

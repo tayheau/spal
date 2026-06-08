@@ -1,109 +1,104 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Iterator, Protocol, runtime_checkable
+from typing import Any, ClassVar, TypeVar
+from collections.abc import Iterator, Callable
+from abc import ABC, abstractmethod
 
 import numpy as np
+from typing_extensions import override
 
 from .hierarchy import Population, Unit
 
+S = TypeVar("S", bound="Op")
 
-@dataclass
+def per_unit(
+    fn: Callable[[S, UnitContext], UnitContext],
+) -> Callable[[S, Iterator[UnitContext]], Iterator[UnitContext]]:
+    def __call__(self: S, stream: Iterator[UnitContext]) -> Iterator[UnitContext]:
+        return (fn(self, uc) for uc in stream)
+    return __call__
+
+@dataclass(slots=True)
 class UnitContext:
     """
-    Ephemeral runtime object. Carries references + whatever the ops resolved.
+    Ephemeral runtime object.
+    Each operation will enrich the cach with derived data.
     """
-
     unit: Unit
-    spikes: np.ndarray
-    coords: dict = field(default_factory=dict)
-    events: np.ndarray | None = None
-    window: tuple[float, float] | None = None
-    trials: list[np.ndarray] | None = None
+    coords: dict[str, Any]
+    cache: dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def spikes(self) -> np.ndarray:
+        return self.unit.source.spikes(self.unit.id)
 
-# --------------------------------------------------------------------------- #
-# Ops: each one is a small transformation UnitContext -> UnitContext.
-# stream() knows none of them; adding an op never touches stream().
-# --------------------------------------------------------------------------- #
-@runtime_checkable
-class Op(Protocol):
-    def apply(self, uc: UnitContext) -> UnitContext: ...
+class Op(ABC):
+    requires: ClassVar[frozenset[str]] = frozenset()
+    produces: ClassVar[frozenset[str]] = frozenset()
 
+    @abstractmethod
+    def __call__(self, stream: Iterator[UnitContext], /) -> Iterator[UnitContext]:
+        ...
 
 @dataclass(frozen=True)
-class StimulusOp:
-    """Anchor: attaches the event onsets the window aligns to (seconds)."""
-
+class StimulusOp(Op):
     times: np.ndarray
+    produces: ClassVar[frozenset[str]] = frozenset({"events"})
 
-    def apply(self, uc: UnitContext) -> UnitContext:
-        return replace(uc, events=self.times)
-
+    @override
+    @per_unit
+    def __call__(self, uc:UnitContext) -> UnitContext:
+        cache = dict(uc.cache)
+        cache["events"] = self.times
+        return replace(uc, cache=cache)
 
 @dataclass(frozen=True)
-class WindowOp:
-    """Cut the train into per-event windows; trials are event-relative (s)."""
-
+class WindowOp(Op):
     pre: float
     post: float
+    requires: ClassVar[frozenset[str]] = frozenset({"events"})
+    produces: ClassVar[frozenset[str]] = frozenset({"window", "trials"})
 
-    def apply(self, uc: UnitContext) -> UnitContext:
-        if uc.events is None:
-            raise ValueError(
-                "WindowOp needs events to anchor to; "
-                ".with_stimulus(...) must come before .with_window(...)"
-            )
-        lo = np.searchsorted(uc.spikes, uc.events + self.pre, side="left")
-        hi = np.searchsorted(uc.spikes, uc.events + self.post, side="right")
-        trials = [uc.spikes[a:b] - e for e, a, b in zip(uc.events, lo, hi)]
-        return replace(uc, window=(self.pre, self.post), trials=trials)
-
+    @override
+    @per_unit
+    def __call__(self, uc: UnitContext) -> UnitContext:
+        events = uc.cache["events"]
+        spikes = uc.spikes
+        lo = np.searchsorted(spikes, events + self.pre, side="left")
+        hi = np.searchsorted(spikes, events + self.post, side="right")
+        trials = [spikes[a:b] - event for event, a, b in zip(events, lo, hi)]
+        cache = dict(uc.cache)
+        cache["window"] = (self.pre, self.post)
+        cache["trials"] = trials
+        return replace(uc, cache=cache)
 
 @dataclass(frozen=True)
 class Context:
-    """
-    Immutable execution plan: an ordered tuple of ops. stream() folds them over
-    each unit's spikes, lazily, one ephemeral UnitContext at a time.
-    """
-
     ops: tuple[Op, ...] = ()
 
     def stream(self, population: Population) -> Iterator[UnitContext]:
-
-        for coords, unit in population.walk():
-
-            uc = UnitContext(
-                unit=unit,
-                spikes=unit.source.spikes(unit.id),
-                coords=coords,
-            )
-
-            for op in self.ops:
-                uc = op.apply(uc)
-
-            yield uc
-
+        ucs = (
+            UnitContext(unit=unit, coords=coords)
+            for coords, unit in population.walk()
+        )
+        for op in self.ops: ucs = op(ucs)
+        yield from ucs
 
 @dataclass(frozen=True)
 class ContextBuilder:
-    """
-    Immutable DSL. Each step appends an op; ordering carries the semantics.
-    """
-
     ops: tuple[Op, ...] = ()
 
-    def with_stimulus(self, times) -> "ContextBuilder":
-        return replace(
-            self,
-            ops=self.ops + (StimulusOp(np.asarray(times, dtype=float)),),
-        )
-
-    def with_window(self, pre: float, post: float) -> "ContextBuilder":
-        return replace(
-            self,
-            ops=self.ops + (WindowOp(float(pre), float(post)),),
-        )
+    def add(self, op:Op) -> "ContextBuilder":
+        return replace(self, ops=self.ops + (op,))
 
     def build(self) -> Context:
+        available: set[str] = set()
+        for op in self.ops:
+            missing = op.requires - available
+            if missing:
+                raise ValueError(
+                        f'''{type(op).__name__} requires {sorted(missing)},
+                        but no prior op produces it.''')
+            available |= op.produces
         return Context(ops=self.ops)

@@ -32,7 +32,7 @@ def _reduce(values: list, method: Any):
 class AnalysisResult:
     """Per-unit records ({**coords, 'value': ...}) plus the plan."""
 
-    records: list[dict]
+    records: list[dict[str, Any]]
     context: Context
 
     @property

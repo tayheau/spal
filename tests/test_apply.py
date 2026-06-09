@@ -1,18 +1,21 @@
 import unittest 
 
 import numpy as np
+from typing_extensions import override
 
-from spal.core.hierarchy import Unit, Recording, Population, Subject
-from spal.core.apply import apply
-from spal.core.context import ContextBuilder, StimulusOp, WindowOp
-from helpers import FakeSource, make_population
+from spal.apply import AnalysisResult, apply
+from spal.context import ContextBuilder
+from spal.hierarchy import Population
+from spal.ops import StimulusOp, WindowOp
+from tests.helpers import make_population
 
 N_SPIKES = lambda uc: len(uc.spikes)
 
 class TestApply(unittest.TestCase):
+    @override
     def setUp(self):
-        self.pop = make_population()
-        self.res = apply(self.pop, N_SPIKES)
+        self.pop: Population = make_population()
+        self.res: AnalysisResult = apply(self.pop, N_SPIKES)
 
     def test_one_record_per_unit(self):
         self.assertEqual(len(self.res), 4)
@@ -38,4 +41,4 @@ class TestApply(unittest.TestCase):
         self.assertTrue(all(v == 1 for v in res.values))  # one event -> one trial
 
 if __name__ == "__main__":
-    unittest.main()
+    _ = unittest.main()

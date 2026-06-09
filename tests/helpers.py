@@ -1,5 +1,5 @@
 import numpy as np
-from spal.core.hierarchy import Recording, Subject, Population
+from spal.hierarchy import Recording, Subject, Population
 
 class FakeSource:
     """Deterministic SpikeSource for exact assertions."""

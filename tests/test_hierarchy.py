@@ -2,8 +2,8 @@ import unittest
 
 import numpy as np
 
-from spal.core.hierarchy import Unit, Recording, Population, Subject
-from helpers import FakeSource, make_population
+from spal.hierarchy import Unit, Recording, Population, Subject
+from tests.helpers import FakeSource, make_population
 
 class TestHierarchy(unittest.TestCase):
     def test_unit_spikes_delegates(self):
@@ -42,4 +42,4 @@ class TestHierarchy(unittest.TestCase):
         self.assertEqual([r.id for r in pop.recordings()], ["rA", "rB"])
 
 if __name__ == "__main__":
-    unittest.main()
+    _ = unittest.main()

@@ -1,23 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Any, ClassVar, TypeVar
-from collections.abc import Iterator, Callable
-from abc import ABC, abstractmethod
+from typing import Any
+from collections.abc import Iterator
 
 import numpy as np
-from typing_extensions import override
 
 from .hierarchy import Population, Unit
-
-S = TypeVar("S", bound="Op")
-
-def per_unit(
-    fn: Callable[[S, UnitContext], UnitContext],
-) -> Callable[[S, Iterator[UnitContext]], Iterator[UnitContext]]:
-    def __call__(self: S, stream: Iterator[UnitContext]) -> Iterator[UnitContext]:
-        return (fn(self, uc) for uc in stream)
-    return __call__
+from .ops import Op
 
 @dataclass(slots=True)
 class UnitContext:
@@ -33,46 +23,6 @@ class UnitContext:
     def spikes(self) -> np.ndarray:
         return self.unit.source.spikes(self.unit.id)
 
-class Op(ABC):
-    requires: ClassVar[frozenset[str]] = frozenset()
-    produces: ClassVar[frozenset[str]] = frozenset()
-
-    @abstractmethod
-    def __call__(self, stream: Iterator[UnitContext], /) -> Iterator[UnitContext]:
-        ...
-
-@dataclass(frozen=True)
-class StimulusOp(Op):
-    times: np.ndarray
-    produces: ClassVar[frozenset[str]] = frozenset({"events"})
-
-    @override
-    @per_unit
-    def __call__(self, uc:UnitContext) -> UnitContext:
-        cache = dict(uc.cache)
-        cache["events"] = self.times
-        return replace(uc, cache=cache)
-
-@dataclass(frozen=True)
-class WindowOp(Op):
-    pre: float
-    post: float
-    requires: ClassVar[frozenset[str]] = frozenset({"events"})
-    produces: ClassVar[frozenset[str]] = frozenset({"window", "trials"})
-
-    @override
-    @per_unit
-    def __call__(self, uc: UnitContext) -> UnitContext:
-        events = uc.cache["events"]
-        spikes = uc.spikes
-        lo = np.searchsorted(spikes, events + self.pre, side="left")
-        hi = np.searchsorted(spikes, events + self.post, side="right")
-        trials = [spikes[a:b] - event for event, a, b in zip(events, lo, hi)]
-        cache = dict(uc.cache)
-        cache["window"] = (self.pre, self.post)
-        cache["trials"] = trials
-        return replace(uc, cache=cache)
-
 @dataclass(frozen=True)
 class Context:
     ops: tuple[Op, ...] = ()
@@ -85,6 +35,7 @@ class Context:
         for op in self.ops: ucs = op(ucs)
         yield from ucs
 
+# TODO (tayheau): make a base class with a method for each op 
 @dataclass(frozen=True)
 class ContextBuilder:
     ops: tuple[Op, ...] = ()

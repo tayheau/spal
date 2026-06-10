@@ -6,6 +6,7 @@ from collections.abc import Iterator, Callable
 from typing_extensions import override
 from dataclasses import dataclass, replace
 
+from spal.stimulus import StimulusTable
 import numpy as np
 
 if TYPE_CHECKING: from .context import UnitContext
@@ -29,15 +30,28 @@ class Op(ABC):
 
 @dataclass(frozen=True)
 class StimulusOp(Op):
-    times: np.ndarray
+    stimulus: StimulusTable
+    on: str | None = None
     produces: ClassVar[frozenset[str]] = frozenset({"events"})
-
+ 
     @override
     @per_unit
-    def __call__(self, uc:UnitContext) -> UnitContext:
+    def __call__(self, uc: UnitContext) -> UnitContext:
+        if self.on is None:
+            events = self.stimulus.onsets
+        else:
+            if self.on not in self.stimulus.params:
+                raise KeyError(
+                    f'''StimulusOp(on={self.on!r}) but the table has no such
+                    column. Available: {self.stimulus.params.keys()}'''
+                )
+            events = self.stimulus.select_where(
+                **{self.on: uc.coords[self.on]}
+            ).onsets
         cache = dict(uc.cache)
-        cache["events"] = self.times
+        cache["events"] = events
         return replace(uc, cache=cache)
+
 
 @dataclass(frozen=True)
 class WindowOp(Op):

@@ -29,16 +29,17 @@ class RandomSpikeSource:
 
     def __init__(
         self,
-        duration: float,
+        onsets: np.ndarray,
         mean_rate_hz: float = 5.0,
         n_units: int = 2,
-        seed: int | None = None,
+        seed: int | np.random.Generator | None = None,
     ):
-        self.duration = duration
-        self.mean_rate_hz = mean_rate_hz
+        self._duration: float = float(onsets[-1] + 2)
+        self._mean_rate_hz:float = mean_rate_hz
+        self._seed = seed
+        self._onsets = onsets
 
         self._unit_ids = [f"u{i}" for i in range(n_units)]
-        self._rng = np.random.default_rng(seed)
         self._cache: dict[str, np.ndarray] = {}
 
     @property
@@ -46,15 +47,26 @@ class RandomSpikeSource:
         return list(self._unit_ids)
 
     def spikes(self, unit_id: str) -> np.ndarray:
-
         if unit_id not in self._unit_ids: raise KeyError(f"Unknown unit '{unit_id}'")
 
         if unit_id not in self._cache:
+            rng = np.random.default_rng(self._seed)
+            
+            if self._seed is None:
+                resp_strength = rng.uniform(0, 5)
+            else:
+                vals = np.linspace(0, 5, len(self._unit_ids))[::-1]
+                _i = int(np.argwhere(np.asarray(self._unit_ids) == unit_id).squeeze())
+                resp_strength = vals[_i]
 
-            n_spikes = self._rng.poisson(self.duration * self.mean_rate_hz)
-
-            self._cache[unit_id] = np.sort(
-                self._rng.uniform(0, self.duration, size=n_spikes)
-            )
+            bg = np.sort(rng.uniform(0, self._duration, rng.poisson(self._mean_rate_hz * self._duration)))
+            burst = np.concatenate([
+                o + rng.uniform(0.02, 0.06, rng.poisson(resp_strength))        
+                for o in self._onsets
+            ])
+            self._cache[unit_id] = np.sort( np.concatenate([bg, burst]))
 
         return self._cache[unit_id]
+
+
+

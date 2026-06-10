@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Literal, Protocol
+from pathlib import Path
+
 import numpy as np
 
 

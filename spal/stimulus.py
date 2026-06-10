@@ -39,41 +39,38 @@ class StimulusTable:
  
         validated: dict[str, np.ndarray] = {}
         for name, arr in params.items():
-            arr = self._validate_array(arr, n, name)
-            validated[name] = arr
+            validated[name] = self._validate_array(arr, n, name)
 
         order = np.argsort(self.onsets)
-        self.onsets      = self.onsets[order]
+        self.onsets = self.onsets[order]
         self.params = ParamNamespace({k: v[order] for k, v in validated.items()})
 
-    def get_unique_conditions(self) -> list[dict[str, float]]:
+    def get_unique_conditions(self) -> list[dict[str, Any]]:
         keys = self.params.keys()
-        if not keys:
-            return [{}]
-        matrix = np.column_stack([self.params.__dict__[k] for k in keys])
+        if not keys: return [{}]
+        columns = [self.params.__dict__[k] for k in keys]
+        seen: dict[tuple[Any, ...], dict[str, Any]] = {}
+        for row in zip(*columns):
+            if row not in seen:
+                seen[row] = {k : v.item() if hasattr(v, "item") else v
+                             for k, v in zip(keys, row)}
+        return list(seen.values())
 
-        unique_rows = np.unique(matrix, axis = 0)
-
-        return [
-            {k: float(row[i]) for i, k in enumerate(keys)}
-            for row in unique_rows
-        ]
-
-    def select_where(self, **conditions: float) -> StimulusTable:
+    def select_where(self, **conditions: Any) -> StimulusTable:
         for name in conditions:
             if name not in self.params:
                 raise ValueError(f"Parameter '{name}' not found.\nAvailable: {self.params.keys()}")
-
         mask = np.ones(len(self.onsets), dtype=bool)
         for name, value in conditions.items():
-            mask &= np.isclose(self.params.__dict__[name], value)
-
+            col = self.params.__dict__[name]
+            if np.issubdtype(col.dtype, np.floating):
+                mask &= np.isclose(col, value)
+            else:
+                mask &= col == value
         return StimulusTable(
-                onsets = self.onsets[mask],
-                **{k: v[mask] for k, v in self.params.to_dict().items()}
-            )
-
- 
+            onsets=self.onsets[mask],
+            **{k: v[mask] for k, v in self.params.to_dict().items()}
+        )
  
     @staticmethod
     def _validate_array(
@@ -81,7 +78,7 @@ class StimulusTable:
         expected_len: int,
         name: str,
     ) -> np.ndarray :
-        arr = np.asarray(arr, dtype=float)
+        arr = np.asarray(arr)
         if len(arr) != expected_len:
             raise ValueError(
                 f"{name} length ({len(arr)}) != onsets length ({expected_len})."

@@ -67,6 +67,8 @@ class WindowOp(Op):
         spikes = uc.spikes
         lo = np.searchsorted(spikes, events + self.pre, side="left")
         hi = np.searchsorted(spikes, events + self.post, side="right")
+        # TODO (tayheau) : remove the for loop for vectorized op (CSR)
+        # TODO (tayheau) : benchmark actual vs vectorized
         trials = [spikes[a:b] - event for event, a, b in zip(events, lo, hi)]
         cache = dict(uc.cache)
         cache["window"] = (self.pre, self.post)

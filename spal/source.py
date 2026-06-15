@@ -69,4 +69,14 @@ class RandomSpikeSource:
         return self._cache[unit_id]
 
 
+#TODO(tayheau)
+class SISortingAnalyzerSpikeSource:
+    @classmethod
+    def load(cls):
+        return None
 
+#TODO(tayheau)
+class PhySpikeSource:
+    @classmethod
+    def load(cls):
+        return None

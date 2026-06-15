@@ -45,16 +45,23 @@ class StimulusTable:
         self.onsets = self.onsets[order]
         self.params = ParamNamespace({k: v[order] for k, v in validated.items()})
 
-    def get_unique_conditions(self) -> list[dict[str, Any]]:
-        keys = self.params.keys()
-        if not keys: return [{}]
-        columns = [self.params.__dict__[k] for k in keys]
+    def unique_conditions(self, by: str | list[str]) -> list[dict[str, Any]]:
+        if isinstance(by, str): by = [by]
+        for name in by:
+            if name not in self.params:
+                raise ValueError(f"Parameter '{name}' not found.\nAvailable: {self.params.keys()}")
+        if not by:
+            return [{}]
+        columns = [self.params.__dict__[k] for k in by]
         seen: dict[tuple[Any, ...], dict[str, Any]] = {}
         for row in zip(*columns):
             if row not in seen:
-                seen[row] = {k : v.item() if hasattr(v, "item") else v
-                             for k, v in zip(keys, row)}
+                seen[row] = {k: v.item() if hasattr(v, "item") else v
+                             for k, v in zip(by, row)}
         return list(seen.values())
+
+    def get_unique_conditions(self) -> list[dict[str, Any]]:
+        return self.unique_conditions(tuple(self.params.keys()))
 
     def select_where(self, **conditions: Any) -> StimulusTable:
         for name in conditions:

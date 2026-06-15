@@ -7,7 +7,7 @@ from typing_extensions import override
 from dataclasses import dataclass, replace
 
 from spal.stimulus import StimulusTable
-import numpy as np
+from spal.window import window
 
 if TYPE_CHECKING: from .context import UnitContext
 
@@ -63,14 +63,20 @@ class WindowOp(Op):
     @override
     @per_unit
     def __call__(self, uc: UnitContext) -> UnitContext:
-        events = uc.cache["events"]
-        spikes = uc.spikes
-        lo = np.searchsorted(spikes, events + self.pre, side="left")
-        hi = np.searchsorted(spikes, events + self.post, side="right")
-        # TODO (tayheau) : remove the for loop for vectorized op (CSR)
-        # TODO (tayheau) : benchmark actual vs vectorized
-        trials = [spikes[a:b] - event for event, a, b in zip(events, lo, hi)]
         cache = dict(uc.cache)
         cache["window"] = (self.pre, self.post)
-        cache["trials"] = trials
+        cache["trials"] = window(uc.spikes, uc.cache["events"], self.pre, self.post)
         return replace(uc, cache=cache)
+
+@dataclass(frozen=True)
+class GroupOp(Op):
+    stimulus: StimulusTable
+    by: tuple[str, ...]
+    produces: ClassVar[frozenset[str]] = frozenset({"events"})          
+
+    def __call__(self, stream):              
+        for uc in stream:
+            for cond in self.stimulus.unique_conditions(self.by):   
+                sub = self.stimulus.select_where(**cond)
+                cache = dict(uc.cache); cache["events"] = sub.onsets
+                yield replace(uc, coords={**uc.coords, **cond}, cache=cache)

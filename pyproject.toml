@@ -15,4 +15,5 @@ dev = [
     "matplotlib>=3.11.0",
     "numba>=0.65.1",
     "pytest>=9.0.3",
+    "zarr>=2.18,<3",
 ]

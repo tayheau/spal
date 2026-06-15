@@ -88,6 +88,25 @@ class AnalysisResult:
             return _stack(self.values)
         raise ValueError(f"unknown format {fmt!r}")
 
+    def __repr__(self) -> str:
+        plan = " → ".join(type(op).__name__ for op in self.context.ops) or "∅"
+        n = len(self.records)
+        if n == 0:
+            return f"AnalysisResult(empty | {plan})"
+        coords = [k for k in self.records[0] if k not in ("value", "n")]
+        dims = ", ".join(
+            f"{k}×{c}" for k in coords
+            if (c := len({r.get(k) for r in self.records})) > 1
+        )
+        vals = [r["value"] for r in self.records]
+        if all(np.ndim(v) == 0 for v in vals):
+            a = np.asarray(vals, float)
+            vsum = f"value∈[{a.min():.3g}, {a.max():.3g}]"
+        else:
+            vsum = f"value: {np.asarray(vals[0]).shape} arrays"
+        parts = [f"{n} records", dims, vsum, plan]
+        return "AnalysisResult(" + " | ".join(p for p in parts if p) + ")"
+
 
 def apply(
     population: Population,

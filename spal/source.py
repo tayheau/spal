@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Literal, Protocol
+from typing import Protocol, runtime_checkable
 from pathlib import Path
 
 import numpy as np
 
 
+@runtime_checkable
 class SpikeSource(Protocol):
     """
     Backend abstraction. Any object exposing this API is a valid SpikeSource.

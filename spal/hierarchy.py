@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Iterator
 
+from spal.stimulus import StimulusTable
+
 from .source import SpikeSource
 
 
@@ -21,6 +23,7 @@ class Unit:
 class Recording:
     id: str
     units: list[Unit]
+    stimulus: StimulusTable | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -28,6 +31,7 @@ class Recording:
         cls,
         id: str,
         source: SpikeSource,
+        stimulus: StimulusTable | None = None,
         *,
         metadata: dict[str, Any] | None = None,
         unit_metadata: dict[str, dict[str, Any]] | None = None,
@@ -35,7 +39,7 @@ class Recording:
         """Build a Recording from a self-describing source's roster."""
         umd = unit_metadata or {}
         units = [Unit(uid, source, umd.get(uid, {})) for uid in source.unit_ids]
-        return cls(id, units, metadata or {})
+        return cls(id, units, stimulus, metadata or {})
 
 
 @dataclass(frozen=True)
@@ -51,37 +55,23 @@ class Population:
     subjects: list[Subject]
     metadata: dict[str, Any] = field(default_factory=dict)
 
-    def walk(self) -> Iterator[tuple[dict, Unit]]:
-        """
-        Iterate over (coords, unit) for every unit in the population.
-
-        coords carries the ancestry (subject / recording / unit ids) merged
-        with metadata, most-specific wins. This is what lets results be grouped
-        by subject_id, region, genotype, ... after the fact -- info that is
-        irrecoverable once units are flattened.
-        """
-
+    def walk(self) -> Iterator[tuple[dict, Unit, Recording]]:
         for subject in self.subjects:
             for recording in subject.recordings:
                 for unit in recording.units:
-
-                    coords = {
-                        **subject.metadata,
-                        **recording.metadata,
-                        **unit.metadata,
-                        "subject_id": subject.id,
-                        "recording_id": recording.id,
+                    coords = { **subject.metadata, **recording.metadata, **unit.metadata,
+                        "subject_id": subject.id, "recording_id": recording.id,
                         "unit_id": unit.id,
                     }
 
-                    yield coords, unit
+                    yield coords, unit, recording
 
     def units(self) -> Iterator[Unit]:
         """
         Iterate over every unit (coords dropped).
         """
 
-        for _, unit in self.walk():
+        for _, unit, _ in self.walk():
             yield unit
 
     def recordings(self) -> Iterator[Recording]:

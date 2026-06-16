@@ -1,7 +1,8 @@
+#TODO(tayheau): add syntactic sugar for ContextBuilder Ops calls
 from __future__ import annotations
 from abc import ABC, abstractmethod
 
-from typing import ClassVar, TypeVar, TYPE_CHECKING
+from typing import ClassVar, TypeVar, TYPE_CHECKING, Any
 from collections.abc import Iterator, Callable
 from typing_extensions import override
 from dataclasses import dataclass, replace
@@ -30,27 +31,24 @@ class Op(ABC):
 
 @dataclass(frozen=True)
 class StimulusOp(Op):
-    stimulus: StimulusTable
-    on: str | None = None
+    conditions: tuple[tuple[str, Any], ...] = ()
     produces: ClassVar[frozenset[str]] = frozenset({"events"})
  
     @override
     @per_unit
     def __call__(self, uc: UnitContext) -> UnitContext:
-        if self.on is None:
-            events = self.stimulus.onsets
-        else:
-            if self.on not in self.stimulus.params:
-                raise KeyError(
-                    f'''StimulusOp(on={self.on!r}) but the table has no such
-                    column. Available: {self.stimulus.params.keys()}'''
-                )
-            events = self.stimulus.select_where(
-                **{self.on: uc.coords[self.on]}
-            ).onsets
+        stim = uc.recording.stimulus
+        if stim is None:
+            raise ValueError(f"recording {uc.coords['recording_id']!r} doesnt have a StimulusTable")
+        events = (stim.onsets if not self.conditions
+                  else stim.select_where(**dict(self.conditions)).onsets) 
         cache = dict(uc.cache)
         cache["events"] = events
         return replace(uc, cache=cache)
+
+    @classmethod
+    def where(cls, **conditions) -> "StimulusOp":
+        return cls(tuple(conditions.items()))
 
 
 @dataclass(frozen=True)
@@ -68,15 +66,19 @@ class WindowOp(Op):
         cache["trials"] = window(uc.spikes, uc.cache["events"], self.pre, self.post)
         return replace(uc, cache=cache)
 
+# 1:N
 @dataclass(frozen=True)
 class GroupOp(Op):
-    stimulus: StimulusTable
-    by: tuple[str, ...]
+    by: str | list[str]
     produces: ClassVar[frozenset[str]] = frozenset({"events"})          
 
-    def __call__(self, stream):              
+    @override
+    def __call__(self, stream: Iterator[UnitContext]):              
         for uc in stream:
-            for cond in self.stimulus.unique_conditions(self.by):   
-                sub = self.stimulus.select_where(**cond)
+            stim = uc.recording.stimulus
+            if stim is None:
+                raise ValueError(f"recording {uc.coords['recording_id']!r} doesnt have a StimulusTable")
+            for cond in stim.unique_conditions(self.by):   
+                sub = stim.select_where(**cond)
                 cache = dict(uc.cache); cache["events"] = sub.onsets
                 yield replace(uc, coords={**uc.coords, **cond}, cache=cache)

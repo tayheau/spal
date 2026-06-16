@@ -6,7 +6,7 @@ from collections.abc import Iterator
 
 import numpy as np
 
-from .hierarchy import Population, Unit
+from .hierarchy import Population, Recording, Unit
 from .ops import Op
 from . import benchmark
 
@@ -17,6 +17,7 @@ class UnitContext:
     Each operation will enrich the cach with derived data.
     """
     unit: Unit
+    recording: Recording
     coords: dict[str, Any]
     cache: dict[str, Any] = field(default_factory=dict)
 
@@ -30,8 +31,8 @@ class Context:
 
     def stream(self, population: Population) -> Iterator[UnitContext]:
         ucs = (
-            UnitContext(unit=unit, coords=coords)
-            for coords, unit in population.walk()
+            UnitContext(unit=unit, recording=rec, coords=coords)
+            for coords, unit, rec in population.walk()
         )
         if not benchmark.BENCH:
             for op in self.ops: ucs = op(ucs)
@@ -41,7 +42,7 @@ class Context:
                 ucs = benchmark.Tap(op(ucs), i, type(op).__name__)
         yield from ucs
 
-# TODO (tayheau): make a base class with a method for each op 
+# TODO (tayheau): make a base class with a method for each op (syntactic sugar)
 @dataclass(frozen=True)
 class ContextBuilder:
     ops: tuple[Op, ...] = ()

@@ -8,6 +8,7 @@ import numpy as np
 
 from .hierarchy import Population, Unit
 from .ops import Op
+from . import benchmark
 
 @dataclass(slots=True)
 class UnitContext:
@@ -32,7 +33,12 @@ class Context:
             UnitContext(unit=unit, coords=coords)
             for coords, unit in population.walk()
         )
-        for op in self.ops: ucs = op(ucs)
+        if not benchmark.BENCH:
+            for op in self.ops: ucs = op(ucs)
+        else:
+            benchmark.reset()
+            for i, op in enumerate(self.ops):
+                ucs = benchmark.Tap(op(ucs), i, type(op).__name__)
         yield from ucs
 
 # TODO (tayheau): make a base class with a method for each op 

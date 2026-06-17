@@ -7,6 +7,7 @@ import numpy as np
 
 from .hierarchy import Population
 from .context import Context
+from .sparklines import frm, spark
 
 
 def _stack(values: list):
@@ -93,20 +94,34 @@ class AnalysisResult:
         n = len(self.records)
         if n == 0:
             return f"AnalysisResult(empty | {plan})"
+
         coords = [k for k in self.records[0] if k not in ("value", "n")]
-        dims = ", ".join(
-            f"{k}×{c}" for k in coords
-            if (c := len({r.get(k) for r in self.records})) > 1
-        )
+        varying = [(k, c) for k in coords
+                   if (c := len({r.get(k) for r in self.records})) > 1]
+        dims = ", ".join(f"{k}×{c}" for k, c in varying)
+
         vals = [r["value"] for r in self.records]
-        if all(np.ndim(v) == 0 for v in vals):
+        scalar = all(np.ndim(v) == 0 for v in vals)
+        if scalar:
             a = np.asarray(vals, float)
             vsum = f"value∈[{a.min():.3g}, {a.max():.3g}]"
         else:
             vsum = f"value: {np.asarray(vals[0]).shape} arrays"
-        parts = [f"{n} records", dims, vsum, plan]
-        return "AnalysisResult(" + " | ".join(p for p in parts if p) + ")"
 
+        parts = [f"{n} records", dims, vsum, plan]
+        base = "AnalysisResult(" + " | ".join(p for p in parts if p) + ")"
+
+
+        line = None
+        if scalar and len(varying) == 1:                    
+            k = varying[0][0]
+            order = sorted(range(n), key=lambda j: self.records[j].get(k))
+            line = spark(a[order])
+        elif not scalar and n == 1:                         
+            line = spark(np.asarray(vals[0]))
+        return base if line is None else base + "\n" + line
+
+    # def _repr_html_(self):
 
 def apply(
     population: Population,

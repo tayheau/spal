@@ -56,14 +56,14 @@ class WindowOp(Op):
     pre: float
     post: float
     requires: ClassVar[frozenset[str]] = frozenset({"events"})
-    produces: ClassVar[frozenset[str]] = frozenset({"window", "trials"})
+    produces: ClassVar[frozenset[str]] = frozenset({"window", "csr"})
 
     @override
     @per_unit
     def __call__(self, uc: UnitContext) -> UnitContext:
         cache = dict(uc.cache)
         cache["window"] = (self.pre, self.post)
-        cache["trials"] = window(uc.spikes, uc.cache["events"], self.pre, self.post)
+        cache["csr"] = window(uc.spikes, uc.cache["events"], self.pre, self.post)
         return replace(uc, cache=cache)
 
 # 1:N

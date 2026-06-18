@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 
 @dataclass(frozen=True)
-class Trials:
+class Csr:
     aligned: np.ndarray
     offsets: np.ndarray
 
@@ -58,5 +58,5 @@ try:
 except ImportError:
     _kernel = _window_numpy
 
-def window(spikes: np.ndarray, events: np.ndarray, pre: float, post: float) -> Trials:
-    return Trials(*_kernel(spikes, events, pre, post))
+def window(spikes: np.ndarray, events: np.ndarray, pre: float, post: float) -> Csr:
+    return Csr(*_kernel(spikes, events, pre, post))

@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 
 
+#TODO(tayheau): do a __repr__
 @runtime_checkable
 class SpikeSource(Protocol):
     """

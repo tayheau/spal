@@ -28,6 +28,7 @@ class ParamNamespace:
         return dict(self.__dict__)
 
 
+#TODO(tayheau): do a __repr__
 class StimulusTable:
     def __init__(
         self,

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Iterator
+from typing import Any
+from collections.abc import Iterator
+from typing_extensions import override
 
 from spal.stimulus import StimulusTable
-
-from .source import SpikeSource
+from spal.source import SpikeSource
 
 
 @dataclass(frozen=True)
@@ -42,12 +43,26 @@ class Recording:
         return cls(id, units, stimulus, metadata or {})
 
 
+    def set_column(self, key: str, values) -> None:
+        if len(values) != len(self.units):
+            raise ValueError(f"expected {len(self.units)}, got {key}:{len(values)}")
+        for _u, _v in zip(self.units, values):
+            _u.metadata[key] = _v.item() if hasattr(_v, "item") else _v
+
+    @override
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__} {self.id!r} | {len(self.units)} units | {len(self.stimulus.onsets)} stimulus"
+
 @dataclass(frozen=True)
 class Subject:
     id: str
     recordings: list[Recording]
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    @override
+    def __repr__(self) -> str:
+        return (f"{self.__class__.__name__} {self.id!r} | {len(self.recordings)} recordings"
+                +"".join("\n └" + repr(rec) for rec in self.recordings))
 
 @dataclass(frozen=True)
 class Population:

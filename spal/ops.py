@@ -7,18 +7,32 @@ from collections.abc import Iterator, Callable
 from typing_extensions import override
 from dataclasses import dataclass, replace
 
-from spal.stimulus import StimulusTable
+# from spal.stimulus import StimulusTable
 from spal.window import window
 
-if TYPE_CHECKING: from .context import UnitContext
+if TYPE_CHECKING: from .context import UnitContext, Recording
 
 S = TypeVar("S", bound="Op")
+Stream = Iterator["UnitContext"]
 
 def per_unit(
     fn: Callable[[S, UnitContext], UnitContext],
-) -> Callable[[S, Iterator[UnitContext]], Iterator[UnitContext]]:
-    def __call__(self: S, stream: Iterator[UnitContext]) -> Iterator[UnitContext]:
+) -> Callable[[S, Stream], Stream]:
+    def __call__(self: S, stream: Stream, /) -> Iterator[UnitContext]:
         return (fn(self, uc) for uc in stream)
+    return __call__
+
+def per_recording(
+    fn: Callable[[S, Recording], dict[str, Any]],
+) -> Callable[[S, Stream], Stream]:
+    def __call__(self: S, stream: Stream) -> Stream:
+        last: Recording | None = None
+        delta: dict[str, Any] = {}
+        for uc in stream:
+            if uc.recording is not last:
+                last, delta = uc.recording, fn(self, uc.recording)
+            cache = dict(uc.cache); cache.update(delta)
+            yield replace(uc, cache=cache)
     return __call__
 
 class Op(ABC):
@@ -26,7 +40,7 @@ class Op(ABC):
     produces: ClassVar[frozenset[str]] = frozenset()
 
     @abstractmethod
-    def __call__(self, stream: Iterator[UnitContext], /) -> Iterator[UnitContext]:
+    def __call__(self, stream: Stream, /) -> Stream:
         ...
 
 @dataclass(frozen=True)
@@ -35,16 +49,14 @@ class StimulusOp(Op):
     produces: ClassVar[frozenset[str]] = frozenset({"events"})
  
     @override
-    @per_unit
-    def __call__(self, uc: UnitContext) -> UnitContext:
-        stim = uc.recording.stimulus
+    @per_recording
+    def __call__(self, rec: Recording) -> dict[str, Any]:
+        stim = rec.stimulus
         if stim is None:
-            raise ValueError(f"recording {uc.coords['recording_id']!r} doesnt have a StimulusTable")
+            raise ValueError(f"recording {rec.id!r} doesnt have a StimulusTable")
         events = (stim.onsets if not self.conditions
                   else stim.select_where(**dict(self.conditions)).onsets) 
-        cache = dict(uc.cache)
-        cache["events"] = events
-        return replace(uc, cache=cache)
+        return {"events": events}
 
     @classmethod
     def where(cls, **conditions) -> "StimulusOp":
@@ -73,7 +85,7 @@ class GroupOp(Op):
     produces: ClassVar[frozenset[str]] = frozenset({"events"})          
 
     @override
-    def __call__(self, stream: Iterator[UnitContext]):              
+    def __call__(self, stream: Stream):              
         for uc in stream:
             stim = uc.recording.stimulus
             if stim is None:

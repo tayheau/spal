@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TypeVar
 from collections.abc import Iterator
 from typing_extensions import override
 
 from spal.stimulus import StimulusTable
 from spal.source import SpikeSource
+
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,10 @@ class Recording:
     stimulus: StimulusTable | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def unit_metadata(self) -> _View:
+        return _View(self.units)
+
     @classmethod
     def from_source(
         cls,
@@ -43,11 +48,11 @@ class Recording:
         return cls(id, units, stimulus, metadata or {})
 
 
-    def set_column(self, key: str, values) -> None:
-        if len(values) != len(self.units):
-            raise ValueError(f"expected {len(self.units)}, got {key}:{len(values)}")
-        for _u, _v in zip(self.units, values):
-            _u.metadata[key] = _v.item() if hasattr(_v, "item") else _v
+    # def set_column(self, key: str, values) -> None:
+    #     if len(values) != len(self.units):
+    #         raise ValueError(f"expected {len(self.units)}, got {key}:{len(values)}")
+    #     for _u, _v in zip(self.units, values):
+    #         _u.metadata[key] = _v.item() if hasattr(_v, "item") else _v
 
     @override
     def __repr__(self) -> str:
@@ -95,3 +100,26 @@ class Population:
         """
         for subject in self.subjects:
             yield from subject.recordings
+
+# cant do fine grained changes atm
+class _View:
+    def __init__(self, units: list[Unit]):
+        self._units:list[Unit] = units
+
+    def __getitem__(self, key: str) -> list[Any]:
+        return [u.metadata.get(key) for u in self._units]    # snapshot
+
+    def __setitem__(self, key: str, values: list[Any]) -> None:
+        if len(values) != len(self._units):
+            raise ValueError(f"expected {len(self._units)}, got {key}:{len(values)}")
+        for u, v in zip(self._units, values):
+            u.metadata[key] = v.item() if hasattr(v, "item") else v
+
+    def keys(self) -> set[str]:
+        return {k for u in self._units for k in u.metadata}
+
+    def __iter__(self):
+        return iter(self.keys())
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({', '.join(sorted(self.keys()))})"

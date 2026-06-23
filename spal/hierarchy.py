@@ -26,7 +26,7 @@ class Recording:
     id: str
     units: list[Unit]
     stimulus: StimulusTable | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+    recording_metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def unit_metadata(self) -> _View:
@@ -79,7 +79,7 @@ class Population:
         for subject in self.subjects:
             for recording in subject.recordings:
                 for unit in recording.units:
-                    coords = { **subject.metadata, **recording.metadata, **unit.metadata,
+                    coords = { **subject.metadata, **recording.recording_metadata, **unit.metadata,
                         "subject_id": subject.id, "recording_id": recording.id,
                         "unit_id": unit.id,
                     }

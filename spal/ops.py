@@ -54,8 +54,8 @@ class StimulusOp(Op):
         stim = rec.stimulus
         if stim is None:
             raise ValueError(f"recording {rec.id!r} doesnt have a StimulusTable")
-        events = (stim.onsets if not self.conditions
-                  else stim.select_where(**dict(self.conditions)).onsets) 
+        events = (stim if not self.conditions
+                  else stim.select_where(**dict(self.conditions))) 
         return {"events": events}
 
     @classmethod
@@ -75,22 +75,30 @@ class WindowOp(Op):
     def __call__(self, uc: UnitContext) -> UnitContext:
         cache = dict(uc.cache)
         cache["window"] = (self.pre, self.post)
-        cache["csr"] = window(uc.spikes, uc.cache["events"], self.pre, self.post)
+        cache["csr"] = window(uc.spikes, uc.cache["events"].onsets, self.pre, self.post)
         return replace(uc, cache=cache)
 
 # 1:N
 @dataclass(frozen=True)
 class GroupOp(Op):
-    by: str | list[str]
-    produces: ClassVar[frozenset[str]] = frozenset({"events"})          
+    by: str | tuple[str, ...]
+    produces: ClassVar[frozenset[str]] = frozenset({"events"})
 
     @override
-    def __call__(self, stream: Stream):              
+    def __call__(self, stream: Stream):
+        last_rec = None
+        groups: dict[int, list] = {}
         for uc in stream:
-            stim = uc.recording.stimulus
-            if stim is None:
-                raise ValueError(f"recording {uc.coords['recording_id']!r} doesnt have a StimulusTable")
-            for cond in stim.unique_conditions(self.by):   
-                sub = stim.select_where(**cond)
-                cache = dict(uc.cache); cache["events"] = sub.onsets
+            if uc.recording is not last_rec:                   
+                groups.clear(); last_rec = uc.recording        
+            tab = uc.cache.get("events") or uc.recording.stimulus
+            if tab is None:
+                raise ValueError(f"recording {uc.coords['recording_id']!r} has no StimulusTable")
+            g = groups.get(id(tab))
+            if g is None:                                      
+                g = groups[id(tab)] = [
+                    (cond, tab.select_where(**cond)) for cond in tab.unique_conditions(self.by)
+                ]
+            for cond, sub in g:
+                cache = dict(uc.cache); cache["events"] = sub
                 yield replace(uc, coords={**uc.coords, **cond}, cache=cache)

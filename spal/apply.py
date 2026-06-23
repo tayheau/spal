@@ -7,15 +7,13 @@ import numpy as np
 
 from .hierarchy import Population
 from .context import Context
-from .sparklines import frm, spark
-
+from .sparklines import spark
 
 def _stack(values: list):
     try:
         return np.stack([np.asarray(v) for v in values])
     except ValueError:
         return np.array(values, dtype=object)  # ragged -> object array
-
 
 def _reduce(values: list, method: Any):
     if callable(method):
@@ -28,6 +26,12 @@ def _reduce(values: list, method: Any):
         raise ValueError(f"unknown aggregation method {method!r}")
     return fns[method](_stack(values), axis=0)
 
+def _hashable(v):
+    if isinstance(v, list):
+        return tuple(v)
+    if isinstance(v, np.ndarray):
+        return tuple(v.flat)
+    return v
 
 @dataclass
 class AnalysisResult:
@@ -59,25 +63,28 @@ class AnalysisResult:
 
         return AnalysisResult([r for r in self.records if ok(r)], self.context)
 
-    def aggregate(self, by, method: Any = "mean") -> "AnalysisResult":
+    def reduce_by(self, by, fn: Callable[[list[dict]], Any]) -> "AnalysisResult":
         keys = (by,) if isinstance(by, str) else tuple(by)
-
         groups: dict[tuple, list[dict]] = {}
         for r in self.records:
-            groups.setdefault(tuple(r.get(k) for k in keys), []).append(r)
-
-        out: list[dict] = []
+            groups.setdefault(tuple(_hashable(r.get(k)) for k in keys), []).append(r)
+        out = []
         for gk, rows in groups.items():
             rec: dict = {}
             for c in set().union(*(r.keys() for r in rows)) - {"value", "n"}:
-                vals = {r.get(c) for r in rows}      # keep coords constant in group
+                vals = {_hashable(r.get(c)) for r in rows}
                 if len(vals) == 1:
                     rec[c] = next(iter(vals))
             rec.update(dict(zip(keys, gk)))
-            rec["value"] = _reduce([r["value"] for r in rows], method)
+            res = fn(rows)
+            rec.update(res if isinstance(res, dict) else {"value": res})
             rec["n"] = len(rows)
             out.append(rec)
         return AnalysisResult(out, self.context)
+
+    def aggregate(self, by, method: Any = "mean") -> "AnalysisResult":
+        # value-only reduction: a special case of reduce_by
+        return self.reduce_by(by, lambda rows: _reduce([r["value"] for r in rows], method))
 
     def to(self, fmt: Any = "records"):
         if fmt in ("records", dict, list):
@@ -97,7 +104,7 @@ class AnalysisResult:
 
         coords = [k for k in self.records[0] if k not in ("value", "n")]
         varying = [(k, c) for k in coords
-                   if (c := len({r.get(k) for r in self.records})) > 1]
+                   if (c := len({_hashable(r.get(k)) for r in self.records})) > 1]
         dims = ", ".join(f"{k}×{c}" for k, c in varying)
 
         vals = [r["value"] for r in self.records]
@@ -111,13 +118,12 @@ class AnalysisResult:
         parts = [f"{n} records", dims, vsum, plan]
         base = "AnalysisResult(" + " | ".join(p for p in parts if p) + ")"
 
-
         line = None
-        if scalar and len(varying) == 1:                    
+        if scalar and len(varying) == 1:
             k = varying[0][0]
             order = sorted(range(n), key=lambda j: self.records[j].get(k))
             line = spark(a[order])
-        elif not scalar and n == 1:                         
+        elif not scalar and n == 1:
             line = spark(np.asarray(vals[0]))
         return base if line is None else base + "\n" + line
 

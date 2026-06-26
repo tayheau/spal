@@ -72,6 +72,8 @@ class AnalysisResult:
 
     def reduce_by(self, by, fn: Callable[[list[dict]], Any]) -> "AnalysisResult":
         keys = (by,) if isinstance(by, str) else tuple(by)
+        if (invalid := set(keys) - self.coord_keys):
+            raise ValueError(f"Unkown coord keys : {invalid}")
         groups: dict[tuple, list[dict]] = {}
         for r in self.records:
             groups.setdefault(tuple(_hashable(r.get(k)) for k in keys), []).append(r)
@@ -88,9 +90,10 @@ class AnalysisResult:
             out.append(rec)
         return AnalysisResult(out, self.context)
 
-    def aggregate(self, by, method: Any = "mean") -> "AnalysisResult":
-        # value-only reduction: a special case of reduce_by
-        return self.reduce_by(by, lambda rows: _reduce([r["value"] for r in rows], method))
+    def aggregate(self, by:str|Sequence[str]|None = None,
+                  method: Any = "mean",) -> "AnalysisResult":
+        return self.reduce_by([] if by is None else by,
+                              lambda rows: _reduce([r["value"] for r in rows], method))
 
     def to(self, fmt: Any = "records"):
         if fmt in ("records", dict, list):

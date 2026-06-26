@@ -9,6 +9,8 @@ from .hierarchy import Population
 from .context import Context
 from .sparklines import spark
 
+RESERVED = frozenset({"value"})
+
 def _stack(values: list):
     try:
         return np.stack([np.asarray(v) for v in values])
@@ -44,6 +46,11 @@ class AnalysisResult:
     def values(self) -> list[Any]:
         return [r["value"] for r in self.records]
 
+    @property
+    def coord_keys(self) -> set[str]:
+        if not self.records: return set()
+        return self.records[0].keys() - RESERVED
+
     def __len__(self) -> int:
         return len(self.records)
 
@@ -71,14 +78,13 @@ class AnalysisResult:
         out = []
         for gk, rows in groups.items():
             rec: dict = {}
-            for c in set().union(*(r.keys() for r in rows)) - {"value", "n"}:
+            for c in self.coord_keys:
                 vals = {_hashable(r.get(c)) for r in rows}
                 if len(vals) == 1:
                     rec[c] = next(iter(vals))
             rec.update(dict(zip(keys, gk)))
             res = fn(rows)
             rec.update(res if isinstance(res, dict) else {"value": res})
-            rec["n"] = len(rows)
             out.append(rec)
         return AnalysisResult(out, self.context)
 
@@ -96,13 +102,19 @@ class AnalysisResult:
             return _stack(self.values)
         raise ValueError(f"unknown format {fmt!r}")
 
+    def get_unique_coord_values(self, name: str, exclude_none: bool = True):
+        coords = self.coord_keys
+        if not name in coords:
+            raise ValueError(f"{name!r} is not a valid coord: {coords}.")
+        return {c for r in self.records if (c:=r.get(name)) is not None or not exclude_none}
+
     def __repr__(self) -> str:
         plan = " → ".join(type(op).__name__ for op in self.context.ops) or "∅"
         n = len(self.records)
         if n == 0:
             return f"AnalysisResult(empty | {plan})"
 
-        coords = [k for k in self.records[0] if k not in ("value", "n")]
+        coords = self.coord_keys
         varying = [(k, c) for k in coords
                    if (c := len({_hashable(r.get(k)) for r in self.records})) > 1]
         dims = ", ".join(f"{k}×{c}" for k, c in varying)

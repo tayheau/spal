@@ -7,7 +7,7 @@ from spal.apply import AnalysisResult, apply
 from spal.context import ContextBuilder
 from spal.hierarchy import Population
 from spal.ops import StimulusOp, WindowOp
-from tests.helpers import make_population
+from tests.helpers import make_population, make_stim_population
 
 N_SPIKES = lambda uc: len(uc.spikes)
 
@@ -15,6 +15,7 @@ class TestApply(unittest.TestCase):
     @override
     def setUp(self):
         self.pop: Population = make_population()
+        self.stim_pop: Population = make_stim_population()
         self.res: AnalysisResult = apply(self.pop, N_SPIKES)
 
     def test_one_record_per_unit(self):
@@ -34,11 +35,12 @@ class TestApply(unittest.TestCase):
 
     def test_apply_with_context(self):
         ctx = (ContextBuilder()
-               .add(StimulusOp(np.array([1.0])))
-               .add(WindowOp(-0.5, 0.5))
+               .add(StimulusOp())                    # pas de conditions -> tous les onsets
+               .add(WindowOp(0.0, 0.5))              # [onset, onset+0.5)
                .build())
-        res = apply(self.pop, lambda uc: len(uc.cache["trials"]), ctx=ctx)
-        self.assertTrue(all(v == 1 for v in res.values))  # one event -> one trial
+        res = apply(self.stim_pop, lambda uc: uc.cache["csr"].counts.sum(), ctx=ctx)
+        # u0 fires once per onset (3 onsets) -> 3 ; u1 twice per onset -> 6
+        self.assertEqual(sorted(res.values), [3, 6])
 
 if __name__ == "__main__":
     _ = unittest.main()

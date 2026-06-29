@@ -1,5 +1,6 @@
 import numpy as np
 from spal.hierarchy import Recording, Subject, Population
+from spal.stimulus import StimulusTable
 
 class FakeSource:
     """Deterministic SpikeSource for exact assertions."""
@@ -20,4 +21,15 @@ def make_population() -> Population:
     rA = Recording.from_source("rA", sA, metadata={"region": "V1"})
     rB = Recording.from_source("rB", sB, metadata={"region": "M1"})
     subj = Subject("s0", [rA, rB], metadata={"genotype": "wt"})
+    return Population("p0", [subj])
+
+def make_stim_population() -> Population:
+    onsets = np.array([1.0, 2.0, 3.0])
+    stim = StimulusTable(onsets, freq = np.array([0, 0, 9]))
+    src = FakeSource({
+            "u0": [1.1, 2.1, 3.1],
+            "u1": [1.1, 1.2, 2.1, 2.2, 3.1, 3.2],
+        })
+    rec = Recording.from_source("r0", src, stim, metadata={"region":"cortex"})
+    subj = Subject("s0", [rec], metadata={"genotype":"wt"})
     return Population("p0", [subj])

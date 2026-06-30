@@ -5,6 +5,7 @@ from typing import Any, Callable
 
 import numpy as np
 
+from .export import Matrix, _grid
 from .hierarchy import Population
 from .context import Context
 from .sparklines import spark
@@ -142,7 +143,11 @@ class AnalysisResult:
             line = spark(np.asarray(vals[0]))
         return base if line is None else base + "\n" + line
 
-    # def _repr_html_(self):
+    def to_matrix(self, rows, cols, value="value", fill=np.nan, reduce=None,
+                  row_order=None, col_order=None):
+        M, R, C = _grid(self.records, rows, cols, value=value, fill=fill, reduce=reduce,
+                        row_order=row_order, col_order=col_order)
+        return Matrix(M, R, C)
 
 def apply(
     population: Population,

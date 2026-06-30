@@ -1,7 +1,7 @@
 <div align="center">
 <picture>
   <source  srcset="docs/spal.svg">
-  <img alt="spal logo" src="docs/spal.svg" width="30%">
+  <img alt="spal logo" src="docs/spal.svg" width="40%">
 </picture>
 
 Portable neural population analysis from spike trains

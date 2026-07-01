@@ -31,6 +31,9 @@ class Recording:
     stimulus: StimulusTable | None = None
     recording_metadata: dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self):
+        object.__setattr__(self, "recording_metadata", dict(self.recording_metadata))
+
     @property
     def unit_metadata(self) -> _View:
         return _View(self.units)
@@ -59,7 +62,7 @@ class Recording:
 
     @override
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__} {self.id!r} | {len(self.units)} units | {len(self.stimulus.onsets)} stimulus"
+        return f"{self.__class__.__name__} {self.id!r} | {len(self.units)} units | {len(self.stimulus.onsets) if self.stimulus else 0} stimulus"
 
 @dataclass(frozen=True)
 class Subject:

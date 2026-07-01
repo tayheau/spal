@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 
 class ParamNamespace:
     def __init__(self, arrays: dict[str, np.ndarray]) -> None:
@@ -32,7 +33,7 @@ class ParamNamespace:
 class StimulusTable:
     def __init__(
         self,
-        onsets: np.ndarray | None = None,
+        onsets: npt.ArrayLike | None = None,
         **params: np.ndarray
     ) -> None:
         self.onsets = np.asarray(onsets, dtype=float)

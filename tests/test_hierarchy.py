@@ -4,6 +4,7 @@ import unittest
 import numpy as np
 
 from spal.hierarchy import Unit, Recording, Population, Subject
+from spal.stimulus import StimulusTable
 from tests.helpers import FakeSource
 
 def make_unit(id:str, size:int = 1, metadata: dict[str, Any] | None = None) -> Unit:
@@ -22,7 +23,48 @@ class TestUnit(unittest.TestCase):
         metadata = {"level": "unit"}
         a = make_unit("a", metadata=metadata)
         a.metadata.update({"injected":True})
-        self.assertEqual(a.metadata.get("injected"), True)
+        self.assertTrue(a.metadata.get("injected"))
+
+
+class TestRecording(unittest.TestCase):
+    def test_no_aliasing_recording_metadata(self):
+        r_meta : dict[str, Any] = {"level":"recording"}
+        rec = Recording("r", [], recording_metadata=r_meta)
+        r_meta.update({"injected":True})
+        self.assertNotIn("injected", rec.recording_metadata)
+
+    def test_recording_metadata_modification(self):
+        rec = Recording("r", [], recording_metadata = {"level":"recording"})
+        rec.recording_metadata.update({"injected":True})
+        self.assertTrue(rec.recording_metadata.get("injected"))
+
+    def test_from_source_multiple_unit(self):
+        rec = Recording.from_source("r", FakeSource({"a": [1.0], "b":[2.0]}))
+        self.assertEqual([u.id for u in rec.units], ["a", "b"])
+
+    def test_from_source_metadata_propagation(self):
+        rec = Recording.from_source("r", FakeSource({"a": [1.0], "b":[2.0]}),
+                                    metadata={"level":"recording"},
+                                    unit_metadata={"a": {"level":"unit", "extra":True}, "b": {"level":"unit"}},
+                                    )
+        self.assertDictEqual(rec.recording_metadata, {"level":"recording"})
+        self.assertDictEqual(rec.units[0].metadata, {"level":"unit", "extra":True})
+        self.assertDictEqual(rec.units[1].metadata, {"level":"unit"})
+
+    def test_recording_repr_empty(self):
+        rec = Recording("r", [], recording_metadata = {"level":"recording"})
+        _repr = repr(rec)
+        self.assertIn("Recording 'r'", _repr)
+        self.assertIn("0 units", _repr)
+        self.assertIn("0 stimulus", _repr)
+
+    def test_recording_repr(self):
+        stims = StimulusTable(onsets=[0.5, 1.2, 1.75])
+        rec = Recording.from_source("r", FakeSource({"a": [1.0], "b":[2.0]}), stims)
+        _repr = repr(rec)
+        self.assertIn("Recording 'r'", _repr)
+        self.assertIn("2 units", _repr)
+        self.assertIn("3 stimulus", _repr)
 
 # class TestHierarchy(unittest.TestCase):
 #     def test_unit_spikes_delegates(self):

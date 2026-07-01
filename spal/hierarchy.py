@@ -15,7 +15,10 @@ class Unit:
     id: str
     source: SpikeSource
     metadata: dict[str, Any] = field(default_factory=dict)
-
+    
+    def __post_init__(self):
+        object.__setattr__(self, "metadata", dict(self.metadata or {}))
+    
     @property
     def spikes(self):
         return self.source.spikes(self.id)
@@ -79,9 +82,9 @@ class Population:
         for subject in self.subjects:
             for recording in subject.recordings:
                 for unit in recording.units:
-                    coords = { **subject.metadata, **recording.recording_metadata, **unit.metadata,
-                        "subject_id": subject.id, "recording_id": recording.id,
-                        "unit_id": unit.id,
+                    coords = {**subject.metadata, **recording.recording_metadata,
+                              **unit.metadata, "subject_id": subject.id,
+                              "recording_id": recording.id, "unit_id": unit.id,
                     }
 
                     yield coords, unit, recording

@@ -1,10 +1,29 @@
-# import unittest 
-#
-# import numpy as np
-#
-# from spal.hierarchy import Unit, Recording, Population, Subject
-# from tests.helpers import FakeSource, make_population
-#
+from typing import Any
+import unittest
+
+import numpy as np
+
+from spal.hierarchy import Unit, Recording, Population, Subject
+from tests.helpers import FakeSource
+
+def make_unit(id:str, size:int = 1, metadata: dict[str, Any] | None = None) -> Unit:
+    assert (size > 0)
+    src = FakeSource({id: np.linspace(0, size, size)})
+    return Unit(id, src, metadata=metadata)
+
+class TestUnit(unittest.TestCase):
+    def test_no_aliasing_unit_metadata(self):
+        metadata: dict[str, Any] = {"level": "unit"}
+        a = make_unit("a", metadata=metadata)
+        metadata.update({"injected":True})
+        self.assertNotIn("injected", a.metadata)
+
+    def test_unit_metadata_modification(self):
+        metadata = {"level": "unit"}
+        a = make_unit("a", metadata=metadata)
+        a.metadata.update({"injected":True})
+        self.assertEqual(a.metadata.get("injected"), True)
+
 # class TestHierarchy(unittest.TestCase):
 #     def test_unit_spikes_delegates(self):
 #         u = Unit("x", FakeSource({"x": [1.0, 2.0]}))
@@ -41,5 +60,5 @@
 #         self.assertEqual(len(list(pop.units())), 4)
 #         self.assertEqual([r.id for r in pop.recordings()], ["rA", "rB"])
 #
-# if __name__ == "__main__":
-#     _ = unittest.main()
+if __name__ == "__main__":
+    _ = unittest.main()

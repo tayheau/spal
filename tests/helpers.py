@@ -1,5 +1,6 @@
+from typing import Any
 import numpy as np
-from spal.hierarchy import Recording, Subject, Population
+from spal.hierarchy import Recording, Subject, Population, Unit
 from spal.stimulus import StimulusTable
 
 class FakeSource:
@@ -13,6 +14,11 @@ class FakeSource:
 
     def spikes(self, unit_id: str) -> np.ndarray:
         return self._d[unit_id]
+
+def make_unit(id:str, size:int = 1, metadata: dict[str, Any] | None = None) -> Unit:
+    assert (size > 0)
+    src = FakeSource({id: np.linspace(0, size, size)})
+    return Unit(id, src, metadata=metadata)
 
 
 def make_population() -> Population:

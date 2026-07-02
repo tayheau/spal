@@ -29,10 +29,10 @@ class Recording:
     id: str
     units: list[Unit]
     stimulus: StimulusTable | None = None
-    recording_metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
-        object.__setattr__(self, "recording_metadata", dict(self.recording_metadata))
+        object.__setattr__(self, "metadata", dict(self.metadata))
 
     @property
     def unit_metadata(self) -> _View:
@@ -70,6 +70,9 @@ class Subject:
     recordings: list[Recording]
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self):
+        object.__setattr__(self, "metadata", dict(self.metadata))
+
     @override
     def __repr__(self) -> str:
         return (f"{self.__class__.__name__} {self.id!r} | {len(self.recordings)} recordings"
@@ -81,11 +84,14 @@ class Population:
     subjects: list[Subject]
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self):
+        object.__setattr__(self, "metadata", dict(self.metadata))
+
     def walk(self) -> Iterator[tuple[dict, Unit, Recording]]:
         for subject in self.subjects:
             for recording in subject.recordings:
                 for unit in recording.units:
-                    coords = {**subject.metadata, **recording.recording_metadata,
+                    coords = {**subject.metadata, **recording.metadata,
                               **unit.metadata, "subject_id": subject.id,
                               "recording_id": recording.id, "unit_id": unit.id,
                     }

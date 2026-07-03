@@ -1,0 +1,64 @@
+site_name: spal docs
+site_description: Portable neural population analysis from spike trains
+repo_url: https://github.com/tayheau/spal
+
+theme:
+  name: material
+  logo: spal.svg
+  palette:
+    # mode clair
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    # mode sombre
+    
+  font:
+    text: Inter          # ou ce que tu veux ; pour le côté mono, voir plus bas
+    code: JetBrains Mono
+  features:
+    - content.code.copy
+    - navigation.sections
+    - navigation.top
+    - navigation.instant  # navigation SPA, plus rapide
+
+extra_css:
+  - stylesheets/extra.css
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - Guides:
+    - Writing a SpikeSource: writing_a_source.md
+    - Exporting for ML: export.md
+  - API:
+    - apply: api/apply.md
+    - source: api/source.md

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, overload, Literal
+from collections.abc import Sequence
 
 import numpy as np
 
-from .export import Matrix, _grid
+from .export import Matrix, _grid, Dataset, _to_dataset
 from .hierarchy import Population
 from .context import Context
 from .sparklines import spark
@@ -143,11 +144,36 @@ class AnalysisResult:
             line = spark(np.asarray(vals[0]))
         return base if line is None else base + "\n" + line
 
-    def to_matrix(self, rows, cols, value="value", fill=np.nan, reduce=None,
-                  row_order=None, col_order=None):
+    def to_matrix(self, rows:str | Sequence[str], cols: str | Sequence[str], value: str="value", fill:float=np.nan,
+                  reduce: Callable[[list[Any]], Any] | None=None, row_order: Sequence[Any] | None=None,
+                  col_order:Sequence[Any] | None=None):
         M, R, C = _grid(self.records, rows, cols, value=value, fill=fill, reduce=reduce,
                         row_order=row_order, col_order=col_order)
         return Matrix(M, R, C)
+
+    @overload
+    def to_dataset(self, *, observation: Literal["trial"],
+                   features: str | Sequence[str], label: str | Sequence[str],
+                   align: Literal["truncate", "pad"],
+                   value: str = ..., fill: float = ...,
+                   feature_order: Sequence[Any] | None = ...,
+                   label_order: Sequence[Any] | None = ...) -> Dataset: ...
+    @overload
+    def to_dataset(self, *, observation: str | Sequence[str],
+                   features: str | Sequence[str], label: str | Sequence[str],
+                   value: str = ..., fill: float = ...,
+                   feature_order: Sequence[Any] | None = ...,
+                   label_order: Sequence[Any] | None = ...) -> Dataset: ...
+
+    def to_dataset(self, *, observation: str | Sequence[str],
+                   features: str | Sequence[str], label: str | Sequence[str],
+                   align: Literal["truncate", "pad"] | None = None,
+                   value: str = "value", fill: float = np.nan,
+                   feature_order: Sequence[Any] | None = None,
+                   label_order: Sequence[Any] | None = None) -> Dataset:
+        return _to_dataset(self.records, observation=observation, features=features,
+                           label=label, align=align, value=value, fill=fill,
+                           feature_order=feature_order, label_order=label_order)
 
 def apply(
     population: Population,

@@ -11,8 +11,6 @@ from .hierarchy import Population
 from .context import Context
 from .sparklines import spark
 
-RESERVED = frozenset({"value"})
-
 def _stack(values: list):
     try:
         return np.stack([np.asarray(v) for v in values])
@@ -43,15 +41,20 @@ class AnalysisResult:
 
     records: list[dict[str, Any]]
     context: Context
+    measures: frozenset[str] = frozenset({"value"})
 
     @property
     def values(self) -> list[Any]:
-        return [r["value"] for r in self.records]
+        mk = ("value" if "value" in self.measures
+              else next(iter(self.measures)) if len(self.measures) == 1 else None)
+        if mk is None:
+            raise ValueError( f"ambiguous .values over measures {set(self.measures)};")
+        return [r[mk] for r in self.records]
 
     @property
     def coord_keys(self) -> set[str]:
         if not self.records: return set()
-        return self.records[0].keys() - RESERVED
+        return self.records[0].keys() - self.measures
 
     def __len__(self) -> int:
         return len(self.records)
@@ -70,16 +73,16 @@ class AnalysisResult:
                     return False
             return True
 
-        return AnalysisResult([r for r in self.records if ok(r)], self.context)
+        return AnalysisResult([r for r in self.records if ok(r)], self.context, self.measures)
 
     def reduce_by(self, by, fn: Callable[[list[dict]], Any]) -> "AnalysisResult":
         keys = (by,) if isinstance(by, str) else tuple(by)
         if (invalid := set(keys) - self.coord_keys):
-            raise ValueError(f"Unkown coord keys : {invalid}")
+            raise ValueError(f"Unknown coord keys : {invalid}")
         groups: dict[tuple, list[dict]] = {}
         for r in self.records:
             groups.setdefault(tuple(_hashable(r.get(k)) for k in keys), []).append(r)
-        out = []
+        out, out_measures = [], None
         for gk, rows in groups.items():
             rec: dict = {}
             for c in self.coord_keys:
@@ -88,9 +91,13 @@ class AnalysisResult:
                     rec[c] = next(iter(vals))
             rec.update(dict(zip(keys, gk)))
             res = fn(rows)
-            rec.update(res if isinstance(res, dict) else {"value": res})
+            contributed = res if isinstance(res, dict) else {"value": res}
+            if out_measures is None:
+                out_measures = frozenset(contributed)          # <- les clés que fn a produites
+            rec.update(contributed)
             out.append(rec)
-        return AnalysisResult(out, self.context)
+        return AnalysisResult(out, self.context,
+                              out_measures or frozenset({"value"}))
 
     def aggregate(self, by:str|Sequence[str]|None = None,
                   method: Any = "mean",) -> "AnalysisResult":
@@ -124,23 +131,29 @@ class AnalysisResult:
                    if (c := len({_hashable(r.get(k)) for r in self.records})) > 1]
         dims = ", ".join(f"{k}×{c}" for k, c in varying)
 
-        vals = [r["value"] for r in self.records]
-        scalar = all(np.ndim(v) == 0 for v in vals)
-        if scalar:
-            a = np.asarray(vals, float)
-            vsum = f"value∈[{a.min():.3g}, {a.max():.3g}]"
-        else:
-            vsum = f"value: {np.asarray(vals[0]).shape} arrays"
+        measures = self.records[0].keys() - coords
+        mk = "value" if "value" in measures else (next(iter(measures)) if measures else None)
+
+        vsum, a, scalar = "", None, False
+        if mk is not None:
+            vals = [r.get(mk) for r in self.records]
+            scalar = all(np.ndim(v) == 0 for v in vals)
+            others = f" (+{len(measures) - 1})" if len(measures) > 1 else ""
+            if scalar:
+                a = np.asarray(vals, float)
+                vsum = f"{mk}∈[{np.nanmin(a):.3g}, {np.nanmax(a):.3g}]{others}"
+            else:
+                vsum = f"{mk}: {np.asarray(vals[0]).shape} arrays{others}"
 
         parts = [f"{n} records", dims, vsum, plan]
         base = "AnalysisResult(" + " | ".join(p for p in parts if p) + ")"
 
         line = None
-        if scalar and len(varying) == 1:
+        if a is not None and scalar and len(varying) == 1:
             k = varying[0][0]
             order = sorted(range(n), key=lambda j: self.records[j].get(k))
             line = spark(a[order])
-        elif not scalar and n == 1:
+        elif a is not None and not scalar and n == 1:
             line = spark(np.asarray(vals[0]))
         return base if line is None else base + "\n" + line
 

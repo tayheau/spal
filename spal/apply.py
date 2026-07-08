@@ -43,13 +43,15 @@ class AnalysisResult:
     context: Context
     measures: frozenset[str] = frozenset({"value"})
 
-    @property
-    def values(self) -> list[Any]:
-        mk = ("value" if "value" in self.measures
-              else next(iter(self.measures)) if len(self.measures) == 1 else None)
-        if mk is None:
-            raise ValueError( f"ambiguous .values over measures {set(self.measures)};")
-        return [r[mk] for r in self.records]
+    def get_values(self, keys: str | Sequence[str] | None = None) -> dict[str, list[Any]] | list[Any]:
+        """
+        Return the values in record order of the `keys` (coords and measures)
+        """
+        _keys: set[str] | None = {keys,} if isinstance(keys, str) else set(keys) if keys is not None else None
+        if _keys is not None and (_r:= _keys - self.measures.union(self.coord_keys)):
+            raise KeyError(f"Unknown key: {_r!r}. Valid ones are {self.measures.union(self.coord_keys)!r}")
+        mk = list(self.measures) if _keys is None else list(_keys)
+        return [r[mk[0]] for r in self.records] if len(mk) == 1 else {k:[r.get(k) for r in self.records] for k in mk}
 
     @property
     def coord_keys(self) -> set[str]:
@@ -60,6 +62,8 @@ class AnalysisResult:
         return len(self.records)
 
     def where(self, **conditions) -> "AnalysisResult":
+        if _e:= set(conditions.keys()) - self.measures.union(self.coord_keys):
+            raise KeyError(f"Unknown key(s): {_e!r}.")
         def ok(r):
             for k, v in conditions.items():
                 g = r.get(k)
@@ -111,7 +115,7 @@ class AnalysisResult:
             import pandas as pd
             return pd.DataFrame(self.records)
         if fmt in ("numpy", np.ndarray):
-            return _stack(self.values)
+            return _stack(self.get_values)
         raise ValueError(f"unknown format {fmt!r}")
 
     def get_unique_coord_values(self, name: str, exclude_none: bool = True):

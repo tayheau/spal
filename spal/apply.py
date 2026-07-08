@@ -43,10 +43,34 @@ class AnalysisResult:
     context: Context
     measures: frozenset[str] = frozenset({"value"})
 
-    def get_values(self, keys: str | Sequence[str] | None = None) -> dict[str, list[Any]] | list[Any]:
-        """
-        Return the values in record order of the `keys` (coords and measures)
-        """
+
+    def get_values(self,
+        keys: str | Sequence[str] | None = None
+    ) -> dict[str, list[Any]] | list[Any]:
+        """Return the values of the `keys` for the records as a `list`, in record order.
+
+        Args:
+            keys: Valid name(s) of the value(s) to extract. Either a `str`, a `Sequence[str]` for multiple values or `None` for the values of `AnalysisResult.measures`.
+
+        Returns:
+            A flat `list` in case of a single `keys`, or a `dict` of `list` in the multiple `keys` case.
+
+        Raises:
+            KeyError: if any `keys` is non valid.
+
+        Example:
+        ```python exec="true" source="block" result="python"
+        from spal.apply import AnalysisResult
+        from spal.context import Context
+
+        res = AnalysisResult(
+            [{"value": 1, "mean": 1, "std": 1},
+             {"value": 2, "mean": 2, "std": 2}],
+            Context(),
+        )
+        print(res.get_values("mean"))
+        ```
+    """
         _keys: set[str] | None = {keys,} if isinstance(keys, str) else set(keys) if keys is not None else None
         if _keys is not None and (_r:= _keys - self.measures.union(self.coord_keys)):
             raise KeyError(f"Unknown key: {_r!r}. Valid ones are {self.measures.union(self.coord_keys)!r}")

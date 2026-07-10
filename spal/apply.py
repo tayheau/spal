@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, overload, Literal, override
+from typing import Any, Callable, overload, Literal
+from typing_extensions import override
 from collections.abc import Sequence
 
 import numpy as np
@@ -136,31 +137,40 @@ class AnalysisResult:
                    if (c := len({_hashable(r.get(k)) for r in self.records})) > 1]
         dims = ", ".join(f"{k}×{c}" for k, c in varying)
 
-        measures = self.records[0].keys() - coords
-        mk = "value" if "value" in measures else (next(iter(measures)) if measures else None)
-
-        vsum, a, scalar = "", None, False
-        if mk is not None:
+        def _summ(mk):
             vals = [r.get(mk) for r in self.records]
-            scalar = all(np.ndim(v) == 0 for v in vals)
-            others = f" (+{len(measures) - 1})" if len(measures) > 1 else ""
-            if scalar:
+            if all(np.ndim(v) == 0 for v in vals):
                 a = np.asarray(vals, float)
-                vsum = f"{mk}∈[{np.nanmin(a):.3g}, {np.nanmax(a):.3g}]{others}"
-            else:
-                vsum = f"{mk}: {np.asarray(vals[0]).shape} arrays{others}"
+                return f"{mk}∈[{np.nanmin(a):.3g}, {np.nanmax(a):.3g}]"
+            return f"{mk}: {np.asarray(vals[0]).shape} arrays"
 
-        parts = [f"{n} records", dims, vsum, plan]
+        measure_summary = ", ".join(_summ(mk) for mk in self.measures)
+        parts = [f"{n} records", dims, measure_summary, plan]
         base = "AnalysisResult(" + " | ".join(p for p in parts if p) + ")"
+        
+        # line = None
+        # if n == 1:
+        #     values = self.get_values(list(self.measures))
+        #     for k, v in values.items():
+        #         if np.ndim(v) > 0:
+        #             line = f"{k}: {spark
 
-        line = None
-        if a is not None and scalar and len(varying) == 1:
-            k = varying[0][0]
-            order = sorted(range(n), key=lambda j: self.records[j].get(k))
-            line = spark(a[order])
-        elif a is not None and not scalar and n == 1:
-            line = spark(np.asarray(vals[0]))
-        return base if line is None else base + "\n" + line
+        return base
+
+        # sparkline only for a SINGLE scalar measure — ambiguous otherwise
+        # line = None
+        # if len(self.measures) == 1:
+        #     mk = next(iter(self.measures))
+        #     vals = [r.get(mk) for r in self.records]
+        #     scalar = all(np.ndim(v) == 0 for v in vals)
+        #     if scalar and len(varying) == 1:
+        #         a = np.asarray(vals, float)
+        #         k = varying[0][0]
+        #         order = sorted(range(n), key=lambda j: self.records[j].get(k))
+        #         line =f"{k}: {spark(a[order])}"
+        #     elif not scalar and n == 1:
+        #         line = spark(np.asarray(vals[0]))
+        # return base if line is None else base + "\n" + line
 
     def to_matrix(self, rows:str | Sequence[str], cols: str | Sequence[str], value: str="value", fill:float=np.nan,
                   reduce: Callable[[list[Any]], Any] | None=None, row_order: Sequence[Any] | None=None,

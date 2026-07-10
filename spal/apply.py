@@ -105,9 +105,11 @@ class AnalysisResult:
         return AnalysisResult(out, self.context, out_measures or frozenset({"value"}))
 
     def aggregate(self, by:str|Sequence[str]|None = None,
-                  method:Literal["mean", "sum", "median", "std"]= "mean",) -> "AnalysisResult":
+                  method:Literal["mean", "sum", "median", "std", "stack"]= "mean",
+                  measure: str | Sequence[str] | None = None) -> "AnalysisResult":
+        m = self.measures if measure is None else measure
         return self.aggregate_using([] if by is None else by,
-                              lambda rows: _reduce([r["value"] for r in rows], method))
+                                    lambda cols: {k:_reduce(cols[k], method) for k in m})
 
     def to(self, fmt: Any = "records"):
         if fmt in ("records", dict, list):

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, overload, Literal
+from typing import Any, Callable, overload, Literal, override
 from collections.abc import Sequence
 
 import numpy as np
@@ -79,7 +79,8 @@ class AnalysisResult:
 
         return AnalysisResult([r for r in self.records if ok(r)], self.context, self.measures)
 
-    def reduce_by(self, by, fn: Callable[[list[dict]], Any]) -> "AnalysisResult":
+    def aggregate_using(self, by: str | Sequence[str],
+                        fn: Callable[[dict[str, list]], Any]) -> "AnalysisResult":
         keys = (by,) if isinstance(by, str) else tuple(by)
         if (invalid := set(keys) - self.coord_keys):
             raise ValueError(f"Unknown coord keys : {invalid}")
@@ -91,21 +92,20 @@ class AnalysisResult:
             rec: dict = {}
             for c in self.coord_keys:
                 vals = {_hashable(r.get(c)) for r in rows}
-                if len(vals) == 1:
-                    rec[c] = next(iter(vals))
+                if len(vals) == 1: rec[c] = next(iter(vals))
             rec.update(dict(zip(keys, gk)))
-            res = fn(rows)
+            cols = {m: [r.get(m) for r in rows] for m in self.measures}
+            res = fn(cols)
             contributed = res if isinstance(res, dict) else {"value": res}
             if out_measures is None:
                 out_measures = frozenset(contributed)          # <- les clés que fn a produites
             rec.update(contributed)
             out.append(rec)
-        return AnalysisResult(out, self.context,
-                              out_measures or frozenset({"value"}))
+        return AnalysisResult(out, self.context, out_measures or frozenset({"value"}))
 
     def aggregate(self, by:str|Sequence[str]|None = None,
-                  method: Any = "mean",) -> "AnalysisResult":
-        return self.reduce_by([] if by is None else by,
+                  method:Literal["mean", "sum", "median", "std"]= "mean",) -> "AnalysisResult":
+        return self.aggregate_using([] if by is None else by,
                               lambda rows: _reduce([r["value"] for r in rows], method))
 
     def to(self, fmt: Any = "records"):
@@ -124,6 +124,7 @@ class AnalysisResult:
             raise ValueError(f"{name!r} is not a valid coord: {coords}.")
         return {c for r in self.records if (c:=r.get(name)) is not None or not exclude_none}
 
+    @override
     def __repr__(self) -> str:
         plan = " → ".join(type(op).__name__ for op in self.context.ops) or "∅"
         n = len(self.records)

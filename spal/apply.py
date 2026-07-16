@@ -113,14 +113,18 @@ class AnalysisResult:
         return self.aggregate_using([] if by is None else by,
                                     lambda cols: {k:_reduce(cols[k], method) for k in m})
 
-    def to(self, fmt: Any = "records"):
-        if fmt in ("records", dict, list):
-            return self.records
-        if fmt in ("pandas", "df"):
+    def export(self, fmt:Literal["pandas", "numpy"] = "numpy"):
+        if fmt == "pandas":
             import pandas as pd
             return pd.DataFrame(self.records)
-        if fmt in ("numpy", np.ndarray):
-            return _stack(self.get_values)
+        if fmt == "numpy":
+            keys = list(dict.fromkeys(k for r in self.records for k in r))
+            cols = {n: np.asarray(self.get_values(n, default=np.nan)) for n in keys}
+            dtype = np.dtype([(k, v.dtype) for k, v in cols.items()])
+            sa = np.empty(len(self), dtype=dtype)
+            for k, v in cols.items():
+                sa[k] = v
+            return sa
         raise ValueError(f"unknown format {fmt!r}")
 
     def get_unique_coord_values(self, name: str, exclude_none: bool = True):

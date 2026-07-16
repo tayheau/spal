@@ -44,7 +44,8 @@ class AnalysisResult:
     context: Context
     measures: frozenset[str] = frozenset({"value"})
 
-    def get_values(self, keys: str | Sequence[str] | None = None) -> dict[str, list[Any]] | list[Any]:
+    def get_values(self, keys: str | Sequence[str] | None = None, *, default: Any | None =None
+                   ) -> dict[str, list[Any]] | list[Any]:
         """
         Return the values in record order of the `keys` (coords and measures)
         """
@@ -52,12 +53,13 @@ class AnalysisResult:
         if _keys is not None and (_r:= _keys - self.measures.union(self.coord_keys)):
             raise KeyError(f"Unknown key: {_r!r}. Valid ones are {self.measures.union(self.coord_keys)!r}")
         mk = list(self.measures) if _keys is None else list(_keys)
-        return [r[mk[0]] for r in self.records] if len(mk) == 1 else {k:[r.get(k) for r in self.records] for k in mk}
+        return [r.get(mk[0], default) for r in self.records] if len(mk) == 1 else {k:[r.get(k) for r in self.records] for k in mk}
 
     @property
     def coord_keys(self) -> set[str]:
         if not self.records: return set()
-        return self.records[0].keys() - self.measures
+        allkeys = set().union(*self.records)
+        return allkeys - self.measures
 
     def __len__(self) -> int:
         return len(self.records)
@@ -84,7 +86,7 @@ class AnalysisResult:
                         fn: Callable[[dict[str, list]], Any]) -> "AnalysisResult":
         keys = (by,) if isinstance(by, str) else tuple(by)
         if (invalid := set(keys) - self.coord_keys):
-            raise ValueError(f"Unknown coord keys : {invalid}")
+            raise KeyError(f"Unknown coord keys : {invalid}")
         groups: dict[tuple, list[dict]] = {}
         for r in self.records:
             groups.setdefault(tuple(_hashable(r.get(k)) for k in keys), []).append(r)
@@ -99,7 +101,7 @@ class AnalysisResult:
             res = fn(cols)
             contributed = res if isinstance(res, dict) else {"value": res}
             if out_measures is None:
-                out_measures = frozenset(contributed)          # <- les clés que fn a produites
+                out_measures = frozenset(contributed)
             rec.update(contributed)
             out.append(rec)
         return AnalysisResult(out, self.context, out_measures or frozenset({"value"}))

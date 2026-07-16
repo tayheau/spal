@@ -22,12 +22,12 @@ def _reduce(values: list, method: Any):
     if callable(method):
         return method(values)
     if method in ("stack", None):
-        return _stack(values)
+        return _stack(values).tolist()
     fns = {"mean": np.nanmean, "sum": np.nansum,
            "median": np.nanmedian, "std": np.nanstd}
     if method not in fns:
         raise ValueError(f"unknown aggregation method {method!r}")
-    return fns[method](_stack(values), axis=0)
+    return fns[method](_stack(values), axis=0).tolist()
 
 def _hashable(v):
     if isinstance(v, list):

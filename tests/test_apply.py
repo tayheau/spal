@@ -51,14 +51,23 @@ class TestARcore(unittest.TestCase):
 
 class TestARget_values(unittest.TestCase):
     def setUp(self):
-        self.res = AnalysisResult([{"value":1, "mean":1, "std":1}, {"value":2, "mean":2, "std":2}],
-                                 Context(), frozenset({"value", "mean",}))
+        self.res = AnalysisResult([{"value":1, "mean":1, "std":1, "extra_measure":0},
+                                   {"value":2, "mean":2, "std":2, "extra_coord":3}],
+                                 Context(), frozenset({"value", "mean", "extra_measure"}))
 
     def test_none_get_values_measures(self):
-        self.assertDictEqual(self.res.get_values(), dict.fromkeys(["value", "mean",], [1,2]))
+        expected = dict.fromkeys(["value", "mean",], [1,2])
+        expected.update({"extra_measure":[0, None]})
+        self.assertDictEqual(self.res.get_values(), expected)
 
     def test_get_values_measures_coord(self):
         self.assertDictEqual(self.res.get_values(["mean", "std"]), dict.fromkeys(["mean", "std"], [1,2]))
+
+    def test_get_values_non_common_coord(self):
+        self.assertEqual(self.res.get_values("extra_coord"), [None, 3])
+
+    def test_get_values_non_common_measure(self):
+        self.assertEqual(self.res.get_values("extra_measure"), [0, None])
 
     def test_invalid_key_get_values(self):
         with self.assertRaises(KeyError):

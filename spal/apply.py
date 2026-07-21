@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import cached_property
 from typing import Any, Callable, overload, Literal
 from typing_extensions import override
 from collections.abc import Sequence
@@ -55,7 +56,7 @@ class AnalysisResult:
         mk = list(self.measures) if _keys is None else list(_keys)
         return [r.get(mk[0], default) for r in self.records] if len(mk) == 1 else {k:[r.get(k) for r in self.records] for k in mk}
 
-    @property
+    @cached_property
     def coord_keys(self) -> set[str]:
         if not self.records: return set()
         allkeys = set().union(*self.records)
@@ -82,28 +83,37 @@ class AnalysisResult:
 
         return AnalysisResult([r for r in self.records if ok(r)], self.context, self.measures)
 
-    def aggregate_using(self, by: str | Sequence[str],
-                        fn: Callable[[dict[str, list]], Any]) -> "AnalysisResult":
+    def aggregate_using(self, by, fn, *, needs: set[str] | None = None):
         keys = (by,) if isinstance(by, str) else tuple(by)
-        if (invalid := set(keys) - self.coord_keys):
+        key_set = set(keys)
+
+        if (invalid := key_set - self.coord_keys):
             raise KeyError(f"Unknown coord keys : {invalid}")
+
+        wanted = needs if needs is not None else self.measures.union(self.coord_keys)
+        other_coords = [c for c in self.coord_keys if c not in key_set]
+
         groups: dict[tuple, list[dict]] = {}
         for r in self.records:
-            groups.setdefault(tuple(_hashable(r.get(k)) for k in keys), []).append(r)
+            gk = tuple(_hashable(r.get(k)) for k in keys)
+            groups.setdefault(gk, []).append(r)
+
         out, out_measures = [], None
         for gk, rows in groups.items():
-            rec: dict = {}
-            for c in self.coord_keys:
-                vals = {_hashable(r.get(c)) for r in rows}
-                if len(vals) == 1: rec[c] = next(iter(vals))
-            rec.update(dict(zip(keys, gk)))
-            cols = {m: [r.get(m) for r in rows] for m in self.measures.union(self.coord_keys)}
+            rec: dict = dict(zip(keys, gk))
+            first = rows[0]
+            for c in other_coords:
+                v0 = _hashable(first.get(c))
+                if all(_hashable(r.get(c)) == v0 for r in rows):  # early-exit
+                    rec[c] = v0
+            cols = {m: [r.get(m) for r in rows] for m in wanted}
             res = fn(cols)
             contributed = res if isinstance(res, dict) else {"value": res}
             if out_measures is None:
                 out_measures = frozenset(contributed)
             rec.update(contributed)
             out.append(rec)
+
         return AnalysisResult(out, self.context, out_measures or frozenset({"value"}))
 
     def aggregate(self, by:str|Sequence[str]|None = None,

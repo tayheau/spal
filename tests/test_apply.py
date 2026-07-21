@@ -83,8 +83,12 @@ class TestARwhere(unittest.TestCase):
         self.assertEqual(self.res.where(value=1).records, [{"value":1, "mean":1, "std":1}])
 
     def test_empty_arg_where_return_copy(self):
-        self.assertIsInstance(sel:=self.res.where(), AnalysisResult)
-        self.assertDictEqual(sel.__dict__, self.res.__dict__)
+        sel = self.res.where()
+        self.assertIsInstance(sel, AnalysisResult)
+        self.assertIsNot(sel, self.res)              # nouvelle instance
+        self.assertEqual(sel.records, self.res.records)
+        self.assertEqual(sel.measures, self.res.measures)
+        self.assertEqual(sel.context, self.res.context)
 
     def test_invalid_kwarg_where(self):
         with self.assertRaises(KeyError):

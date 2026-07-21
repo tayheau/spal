@@ -97,7 +97,7 @@ class AnalysisResult:
                 vals = {_hashable(r.get(c)) for r in rows}
                 if len(vals) == 1: rec[c] = next(iter(vals))
             rec.update(dict(zip(keys, gk)))
-            cols = {m: [r.get(m) for r in rows] for m in self.measures}
+            cols = {m: [r.get(m) for r in rows] for m in self.measures.union(self.coord_keys)}
             res = fn(cols)
             contributed = res if isinstance(res, dict) else {"value": res}
             if out_measures is None:

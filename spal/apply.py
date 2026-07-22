@@ -229,9 +229,15 @@ def apply(
 
     ctx = ctx or Context()  # empty plan -> full population, no windowing
 
-    records = [
-        {**uc.coords, "value": fn(uc)}
-        for uc in ctx.stream(population)
-    ]
+    records = []
+    measures: set[str] = set()
+    for uc in ctx.stream(population):
+        res = fn(uc)
+        if isinstance(res, dict):
+            records.append({**uc.coords, **res})
+            measures.update(res.keys())
+        else:
+            records.append({**uc.coords, "value": res})
+            measures.add("value")
 
-    return AnalysisResult(records=records, context=ctx)
+    return AnalysisResult( records=records, context=ctx, measures=frozenset(measures),)

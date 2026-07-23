@@ -62,7 +62,6 @@ class StimulusOp(Op):
     def where(cls, **conditions) -> "StimulusOp":
         return cls(tuple(conditions.items()))
 
-
 @dataclass(frozen=True)
 class WindowOp(Op):
     pre: float
@@ -77,6 +76,43 @@ class WindowOp(Op):
         cache["window"] = (self.pre, self.post)
         cache["csr"] = window(uc.spikes, uc.cache["events"].onsets, self.pre, self.post)
         return replace(uc, cache=cache)
+
+@dataclass(frozen=True)
+class WhereOp(Op):
+    """
+    # equal  | WhereOp.where(reactive=True)                    
+    # inside  | WhereOp.where(region=("CN", "IC"))              
+    # logical AND  | WhereOp.where(genotype="zebra", reactive=True)  
+    # function  | WhereOp.where(z=lambda x: x is not None and x > 2)  
+    """
+    conditions: tuple[tuple[str, Any], ...] = ()
+    requires: ClassVar[frozenset[str]] = frozenset()
+    produces: ClassVar[frozenset[str]] = frozenset()
+
+    @staticmethod
+    def _match(coords: dict[str, Any], conditions: dict[str, Any]) -> bool:
+        for k, v in conditions.items():
+            g = coords.get(k)
+            if callable(v):
+                if not v(g):
+                    return False
+            elif isinstance(v, (list, tuple, set)):
+                if g not in v:
+                    return False
+            elif g != v:
+                return False
+        return True
+
+    @override
+    def __call__(self, stream: Stream) -> Stream:
+        conds = dict(self.conditions)
+        for uc in stream:
+            if self._match(uc.coords, conds):
+                yield uc
+
+    @classmethod
+    def where(cls, **conditions) -> "WhereOp":
+        return cls(tuple(conditions.items()))
 
 # 1:N
 @dataclass(frozen=True)
